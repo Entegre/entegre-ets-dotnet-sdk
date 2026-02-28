@@ -5,6 +5,7 @@ using Entegre.Ets.Sdk.Models.Common;
 using Entegre.Ets.Sdk.Models.Invoice;
 using Entegre.Ets.Sdk.Models.Dispatch;
 using Entegre.Ets.Sdk.Models.ProducerReceipt;
+using Entegre.Ets.Sdk.Models.Incoming;
 
 namespace Entegre.Ets.Sdk;
 
@@ -214,6 +215,135 @@ public class EtsClient : IEtsClient, IDisposable
         return await GetAsync<ProducerReceiptStatusResult>(
             $"{EtsEndpoints.GetProducerReceiptStatus}?uuid={uuid}",
             cancellationToken);
+    }
+
+    #endregion
+
+    #region Incoming Invoice Operations
+
+    /// <inheritdoc />
+    public async Task<ApiResponse<IncomingInvoiceListResponse>> GetIncomingInvoicesAsync(
+        IncomingInvoiceListRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var queryParams = new List<string>();
+
+        if (request.StartDate.HasValue)
+            queryParams.Add($"startDate={request.StartDate.Value:yyyy-MM-dd}");
+        if (request.EndDate.HasValue)
+            queryParams.Add($"endDate={request.EndDate.Value:yyyy-MM-dd}");
+        if (!string.IsNullOrEmpty(request.SenderTaxId))
+            queryParams.Add($"senderTaxId={request.SenderTaxId}");
+        if (!string.IsNullOrEmpty(request.Status))
+            queryParams.Add($"status={request.Status}");
+
+        queryParams.Add($"page={request.Page}");
+        queryParams.Add($"pageSize={request.PageSize}");
+
+        var query = string.Join("&", queryParams);
+        return await GetAsync<IncomingInvoiceListResponse>(
+            $"{EtsEndpoints.GetIncomingInvoices}?{query}",
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<ApiResponse<IncomingInvoice>> GetIncomingInvoiceAsync(
+        string uuid,
+        CancellationToken cancellationToken = default)
+    {
+        return await GetAsync<IncomingInvoice>(
+            $"{EtsEndpoints.GetIncomingInvoice}?uuid={uuid}",
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<ApiResponse<InvoiceResponseResult>> AcceptInvoiceAsync(
+        string uuid,
+        string? note = null,
+        CancellationToken cancellationToken = default)
+    {
+        var request = new InvoiceResponseRequest
+        {
+            Uuid = uuid,
+            ResponseType = InvoiceResponseType.Kabul,
+            Note = note
+        };
+        return await PostAsync<InvoiceResponseRequest, InvoiceResponseResult>(
+            EtsEndpoints.RespondToInvoice,
+            request,
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<ApiResponse<InvoiceResponseResult>> RejectInvoiceAsync(
+        string uuid,
+        string reason,
+        string? note = null,
+        CancellationToken cancellationToken = default)
+    {
+        var request = new InvoiceResponseRequest
+        {
+            Uuid = uuid,
+            ResponseType = InvoiceResponseType.Red,
+            Reason = reason,
+            Note = note
+        };
+        return await PostAsync<InvoiceResponseRequest, InvoiceResponseResult>(
+            EtsEndpoints.RespondToInvoice,
+            request,
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<ApiResponse<byte[]>> GetIncomingInvoicePdfAsync(
+        string uuid,
+        CancellationToken cancellationToken = default)
+    {
+        return await ExecuteWithRetryAsync(async () =>
+        {
+            var response = await _httpClient.GetAsync(
+                $"{EtsEndpoints.GetIncomingInvoicePdf}?uuid={uuid}",
+                cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+                return new ApiResponse<byte[]> { Success = true, Data = bytes };
+            }
+
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            return new ApiResponse<byte[]>
+            {
+                Success = false,
+                Message = $"HTTP {(int)response.StatusCode}: {content}"
+            };
+        });
+    }
+
+    /// <inheritdoc />
+    public async Task<ApiResponse<string>> GetIncomingInvoiceXmlAsync(
+        string uuid,
+        CancellationToken cancellationToken = default)
+    {
+        return await ExecuteWithRetryAsync(async () =>
+        {
+            var response = await _httpClient.GetAsync(
+                $"{EtsEndpoints.GetIncomingInvoiceXml}?uuid={uuid}",
+                cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var xml = await response.Content.ReadAsStringAsync(cancellationToken);
+                return new ApiResponse<string> { Success = true, Data = xml };
+            }
+
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            return new ApiResponse<string>
+            {
+                Success = false,
+                Message = $"HTTP {(int)response.StatusCode}: {content}"
+            };
+        });
     }
 
     #endregion
@@ -439,6 +569,51 @@ public interface IEtsClient
     /// Gets producer receipt status
     /// </summary>
     Task<ApiResponse<ProducerReceiptStatusResult>> GetProducerReceiptStatusAsync(
+        string uuid,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets list of incoming invoices
+    /// </summary>
+    Task<ApiResponse<IncomingInvoiceListResponse>> GetIncomingInvoicesAsync(
+        IncomingInvoiceListRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets a single incoming invoice
+    /// </summary>
+    Task<ApiResponse<IncomingInvoice>> GetIncomingInvoiceAsync(
+        string uuid,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Accepts an incoming invoice
+    /// </summary>
+    Task<ApiResponse<InvoiceResponseResult>> AcceptInvoiceAsync(
+        string uuid,
+        string? note = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Rejects an incoming invoice
+    /// </summary>
+    Task<ApiResponse<InvoiceResponseResult>> RejectInvoiceAsync(
+        string uuid,
+        string reason,
+        string? note = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets incoming invoice PDF
+    /// </summary>
+    Task<ApiResponse<byte[]>> GetIncomingInvoicePdfAsync(
+        string uuid,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets incoming invoice XML
+    /// </summary>
+    Task<ApiResponse<string>> GetIncomingInvoiceXmlAsync(
         string uuid,
         CancellationToken cancellationToken = default);
 }

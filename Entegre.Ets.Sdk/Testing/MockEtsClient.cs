@@ -3,6 +3,7 @@ using Entegre.Ets.Sdk.Models.Common;
 using Entegre.Ets.Sdk.Models.Invoice;
 using Entegre.Ets.Sdk.Models.Dispatch;
 using Entegre.Ets.Sdk.Models.ProducerReceipt;
+using Entegre.Ets.Sdk.Models.Incoming;
 using Entegre.Ets.Sdk.Webhooks;
 
 namespace Entegre.Ets.Sdk.Testing;
@@ -359,6 +360,148 @@ public class MockEtsClient : IEtsClient
             Status = receipt.Status ?? "SENT",
             StatusDescription = receipt.StatusDescription
         });
+    }
+
+    #endregion
+
+    #region Incoming Invoice Operations
+
+    private readonly ConcurrentDictionary<string, IncomingInvoice> _incomingInvoices = new();
+
+    /// <summary>
+    /// Adds an incoming invoice for testing
+    /// </summary>
+    public void AddIncomingInvoice(IncomingInvoice invoice)
+    {
+        _incomingInvoices[invoice.Uuid] = invoice;
+    }
+
+    public async Task<ApiResponse<IncomingInvoiceListResponse>> GetIncomingInvoicesAsync(
+        IncomingInvoiceListRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await SimulateDelayAsync();
+
+        var invoices = _incomingInvoices.Values.ToList();
+
+        if (request.StartDate.HasValue)
+            invoices = invoices.Where(i => i.InvoiceDate >= request.StartDate.Value).ToList();
+
+        if (request.EndDate.HasValue)
+            invoices = invoices.Where(i => i.InvoiceDate <= request.EndDate.Value).ToList();
+
+        if (!string.IsNullOrEmpty(request.SenderTaxId))
+            invoices = invoices.Where(i => i.Sender.TaxId == request.SenderTaxId).ToList();
+
+        if (!string.IsNullOrEmpty(request.Status))
+            invoices = invoices.Where(i => i.Status == request.Status).ToList();
+
+        var total = invoices.Count;
+        var paged = invoices
+            .Skip((request.Page - 1) * request.PageSize)
+            .Take(request.PageSize)
+            .ToList();
+
+        return CreateSuccessResponse(new IncomingInvoiceListResponse
+        {
+            Invoices = paged,
+            TotalCount = total,
+            Page = request.Page,
+            PageSize = request.PageSize
+        });
+    }
+
+    public async Task<ApiResponse<IncomingInvoice>> GetIncomingInvoiceAsync(
+        string uuid,
+        CancellationToken cancellationToken = default)
+    {
+        await SimulateDelayAsync();
+
+        if (_incomingInvoices.TryGetValue(uuid, out var invoice))
+        {
+            return CreateSuccessResponse(invoice);
+        }
+
+        return CreateErrorResponse<IncomingInvoice>("Incoming invoice not found");
+    }
+
+    public async Task<ApiResponse<InvoiceResponseResult>> AcceptInvoiceAsync(
+        string uuid,
+        string? note = null,
+        CancellationToken cancellationToken = default)
+    {
+        await SimulateDelayAsync();
+
+        if (_incomingInvoices.TryGetValue(uuid, out var invoice))
+        {
+            invoice.Status = IncomingInvoiceStatus.Accepted;
+            invoice.StatusDate = DateTime.UtcNow;
+
+            return CreateSuccessResponse(new InvoiceResponseResult
+            {
+                Uuid = uuid,
+                ResponseType = "KABUL",
+                ResponseDate = DateTime.UtcNow
+            });
+        }
+
+        return CreateErrorResponse<InvoiceResponseResult>("Incoming invoice not found");
+    }
+
+    public async Task<ApiResponse<InvoiceResponseResult>> RejectInvoiceAsync(
+        string uuid,
+        string reason,
+        string? note = null,
+        CancellationToken cancellationToken = default)
+    {
+        await SimulateDelayAsync();
+
+        if (_incomingInvoices.TryGetValue(uuid, out var invoice))
+        {
+            invoice.Status = IncomingInvoiceStatus.Rejected;
+            invoice.StatusDate = DateTime.UtcNow;
+
+            return CreateSuccessResponse(new InvoiceResponseResult
+            {
+                Uuid = uuid,
+                ResponseType = "RED",
+                ResponseDate = DateTime.UtcNow
+            });
+        }
+
+        return CreateErrorResponse<InvoiceResponseResult>("Incoming invoice not found");
+    }
+
+    public async Task<ApiResponse<byte[]>> GetIncomingInvoicePdfAsync(
+        string uuid,
+        CancellationToken cancellationToken = default)
+    {
+        await SimulateDelayAsync();
+
+        if (_incomingInvoices.ContainsKey(uuid))
+        {
+            // Return a simple PDF-like byte array for testing
+            var pdfBytes = System.Text.Encoding.UTF8.GetBytes("%PDF-1.4 Mock PDF Content");
+            return CreateSuccessResponse(pdfBytes);
+        }
+
+        return CreateErrorResponse<byte[]>("Incoming invoice not found");
+    }
+
+    public async Task<ApiResponse<string>> GetIncomingInvoiceXmlAsync(
+        string uuid,
+        CancellationToken cancellationToken = default)
+    {
+        await SimulateDelayAsync();
+
+        if (_incomingInvoices.ContainsKey(uuid))
+        {
+            // Return a simple XML for testing
+            var xml = $"<?xml version=\"1.0\"?><Invoice><UUID>{uuid}</UUID></Invoice>";
+            return CreateSuccessResponse(xml);
+        }
+
+        return CreateErrorResponse<string>("Incoming invoice not found");
     }
 
     #endregion

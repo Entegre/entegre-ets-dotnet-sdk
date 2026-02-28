@@ -85,6 +85,12 @@ public class InvoiceRequest
     /// </summary>
     [JsonPropertyName("withholding")]
     public WithholdingInfo? Withholding { get; set; }
+
+    /// <summary>
+    /// Exemption information (for export, etc.)
+    /// </summary>
+    [JsonPropertyName("exemption")]
+    public ExemptionInfo? Exemption { get; set; }
 }
 
 /// <summary>
@@ -187,6 +193,24 @@ public class WithholdingInfo
     /// </summary>
     [JsonPropertyName("reason")]
     public string? Reason { get; set; }
+}
+
+/// <summary>
+/// VAT exemption information
+/// </summary>
+public class ExemptionInfo
+{
+    /// <summary>
+    /// Exemption code (e.g., 301 for goods export)
+    /// </summary>
+    [JsonPropertyName("code")]
+    public string Code { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Exemption reason
+    /// </summary>
+    [JsonPropertyName("reason")]
+    public string Reason { get; set; } = string.Empty;
 }
 
 /// <summary>

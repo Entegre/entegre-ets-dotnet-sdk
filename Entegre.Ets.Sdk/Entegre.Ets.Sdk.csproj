@@ -8,7 +8,7 @@
 
     <!-- NuGet Package Info -->
     <PackageId>Entegre.Ets.Sdk</PackageId>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <Authors>On2 Elektronik</Authors>
     <Company>On2 Elektronik Ltd. Şti.</Company>
     <Description>Entegre ETS API SDK - E-Fatura, E-Arşiv, E-İrsaliye, E-Müstahsil için .NET SDK</Description>
@@ -31,6 +31,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="8.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="8.0.0" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 

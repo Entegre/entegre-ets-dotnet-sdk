@@ -107,4 +107,11 @@ internal static class EtsEndpoints
 
     public const string SendProducerReceipt = "/api/v1/producer-receipt/send";
     public const string GetProducerReceiptStatus = "/api/v1/producer-receipt/status";
+
+    // Incoming Invoice
+    public const string GetIncomingInvoices = "/api/v1/incoming/invoices";
+    public const string GetIncomingInvoice = "/api/v1/incoming/invoice";
+    public const string RespondToInvoice = "/api/v1/incoming/respond";
+    public const string GetIncomingInvoicePdf = "/api/v1/incoming/invoice/pdf";
+    public const string GetIncomingInvoiceXml = "/api/v1/incoming/invoice/xml";
 }

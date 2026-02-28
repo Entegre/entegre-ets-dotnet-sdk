@@ -170,6 +170,20 @@ public class InvoiceBuilder
     }
 
     /// <summary>
+    /// Sets exemption information (for export, etc.)
+    /// </summary>
+    public InvoiceBuilder WithExemption(string code, string reason)
+    {
+        _invoice.Exemption = new ExemptionInfo
+        {
+            Code = code,
+            Reason = reason
+        };
+        _invoice.InvoiceType = InvoiceType.Istisna;
+        return this;
+    }
+
+    /// <summary>
     /// Builds the invoice request
     /// </summary>
     public InvoiceRequest Build()
@@ -356,6 +370,30 @@ public class InvoiceLineBuilder
     public InvoiceLineBuilder WithDiscountRate(decimal rate)
     {
         _line.DiscountRate = rate;
+        return this;
+    }
+
+    public InvoiceLineBuilder WithName(string name)
+    {
+        _line.Name = name;
+        return this;
+    }
+
+    public InvoiceLineBuilder WithQuantity(decimal quantity)
+    {
+        _line.Quantity = quantity;
+        return this;
+    }
+
+    public InvoiceLineBuilder WithUnitPrice(decimal unitPrice)
+    {
+        _line.UnitPrice = unitPrice;
+        return this;
+    }
+
+    public InvoiceLineBuilder WithVatRate(decimal vatRate)
+    {
+        _line.VatRate = vatRate;
         return this;
     }
 
