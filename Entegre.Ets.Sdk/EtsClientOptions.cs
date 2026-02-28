@@ -6,9 +6,19 @@ namespace Entegre.Ets.Sdk;
 public class EtsClientOptions
 {
     /// <summary>
-    /// API base URL
+    /// Production API base URL
     /// </summary>
-    public string BaseUrl { get; set; } = "https://ets-api.entegre.net";
+    public const string ProductionUrl = "https://ets.bulutix.com";
+
+    /// <summary>
+    /// Test/Sandbox API base URL
+    /// </summary>
+    public const string TestUrl = "https://ets-test.bulutix.com";
+
+    /// <summary>
+    /// API base URL (default: Production)
+    /// </summary>
+    public string BaseUrl { get; set; } = ProductionUrl;
 
     /// <summary>
     /// API key for authentication
@@ -59,6 +69,24 @@ public class EtsClientOptions
     /// Custom HTTP message handler (for testing)
     /// </summary>
     public HttpMessageHandler? HttpMessageHandler { get; set; }
+
+    /// <summary>
+    /// Use test/sandbox environment
+    /// </summary>
+    public EtsClientOptions UseTestEnvironment()
+    {
+        BaseUrl = TestUrl;
+        return this;
+    }
+
+    /// <summary>
+    /// Use production environment
+    /// </summary>
+    public EtsClientOptions UseProductionEnvironment()
+    {
+        BaseUrl = ProductionUrl;
+        return this;
+    }
 }
 
 /// <summary>

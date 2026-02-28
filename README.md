@@ -31,10 +31,19 @@ using Entegre.Ets.Sdk;
 using Entegre.Ets.Sdk.Builders;
 using Entegre.Ets.Sdk.Models.Invoice;
 
-// 1. Client oluştur
+// 1. Client oluştur (Production)
 var client = new EtsClient(options =>
 {
-    options.BaseUrl = "https://ets-api.entegre.net";
+    options.ApiKey = "your-api-key";
+    options.ApiSecret = "your-api-secret";
+    options.CustomerId = "your-customer-id";
+    options.SoftwareId = "your-software-id";
+});
+
+// veya Test ortamı için
+var testClient = new EtsClient(options =>
+{
+    options.UseTestEnvironment();  // https://ets-test.bulutix.com
     options.ApiKey = "your-api-key";
     options.ApiSecret = "your-api-secret";
     options.CustomerId = "your-customer-id";
@@ -118,13 +127,28 @@ var app = builder.Build();
 ```json
 {
   "Ets": {
-    "BaseUrl": "https://ets-api.entegre.net",
+    "BaseUrl": "https://ets.bulutix.com",
     "ApiKey": "your-api-key",
     "ApiSecret": "your-api-secret",
     "CustomerId": "your-customer-id",
     "SoftwareId": "your-software-id"
   }
 }
+```
+
+### Ortam Ayarları
+
+| Ortam | URL |
+|-------|-----|
+| **Production** | `https://ets.bulutix.com` |
+| **Test/Sandbox** | `https://ets-test.bulutix.com` |
+
+```csharp
+// Production (varsayılan)
+options.UseProductionEnvironment();
+
+// Test ortamı
+options.UseTestEnvironment();
 ```
 
 ### Controller Kullanımı
