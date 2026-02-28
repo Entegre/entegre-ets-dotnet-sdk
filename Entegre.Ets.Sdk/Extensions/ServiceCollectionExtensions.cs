@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Entegre.Ets.Sdk.Webhooks;
 
 namespace Entegre.Ets.Sdk.Extensions;
 
@@ -57,6 +58,43 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(options);
         services.AddScoped<IEtsClient, EtsClient>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds webhook handler to the service collection
+    /// </summary>
+    /// <param name="services">Service collection</param>
+    /// <param name="configure">Configuration action</param>
+    /// <returns>Service collection</returns>
+    public static IServiceCollection AddEtsWebhook(
+        this IServiceCollection services,
+        Action<WebhookOptions> configure)
+    {
+        var options = new WebhookOptions();
+        configure(options);
+
+        services.AddSingleton(options);
+        services.AddSingleton<IWebhookHandler, WebhookHandler>();
+        services.AddSingleton<WebhookRouter>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds webhook handler with options
+    /// </summary>
+    /// <param name="services">Service collection</param>
+    /// <param name="options">Webhook options</param>
+    /// <returns>Service collection</returns>
+    public static IServiceCollection AddEtsWebhook(
+        this IServiceCollection services,
+        WebhookOptions options)
+    {
+        services.AddSingleton(options);
+        services.AddSingleton<IWebhookHandler, WebhookHandler>();
+        services.AddSingleton<WebhookRouter>();
 
         return services;
     }
