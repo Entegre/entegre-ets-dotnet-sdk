@@ -5,6 +5,7 @@ using Entegre.Ets.Sdk.Models.Dispatch;
 using Entegre.Ets.Sdk.Models.ProducerReceipt;
 using Entegre.Ets.Sdk.Models.Incoming;
 using Entegre.Ets.Sdk.Webhooks;
+using Entegre.Ets.Sdk.ExchangeRate;
 
 namespace Entegre.Ets.Sdk.Testing;
 
@@ -502,6 +503,82 @@ public class MockEtsClient : IEtsClient
         }
 
         return CreateErrorResponse<string>("Incoming invoice not found");
+    }
+
+    #endregion
+
+    #region Auto-routing Operations
+
+    public async Task<ApiResponse<AutoRouteResult>> SendInvoiceAutoAsync(
+        InvoiceRequest invoice,
+        AutoRouteOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        await SimulateDelayAsync();
+
+        if (ShouldFail())
+            return CreateErrorResponse<AutoRouteResult>("Simulated failure");
+
+        var recipientTaxId = invoice.Receiver?.TaxId ?? "";
+        var isEInvoiceUser = _eInvoiceUsers.ContainsKey(recipientTaxId);
+
+        var documentType = options?.ForceType ?? (isEInvoiceUser ? RouteDocumentType.EFatura : RouteDocumentType.EArsiv);
+
+        var result = await SendInvoiceAsync(invoice, cancellationToken);
+
+        if (!result.Success || result.Data == null)
+            return CreateErrorResponse<AutoRouteResult>(result.Message ?? "Failed");
+
+        return CreateSuccessResponse(new AutoRouteResult
+        {
+            Uuid = result.Data.Uuid,
+            InvoiceNumber = result.Data.InvoiceNumber,
+            DocumentType = documentType,
+            IsEInvoiceRecipient = isEInvoiceUser,
+            Result = result.Data
+        });
+    }
+
+    public async Task<ApiResponse<List<BulkStatusResult>>> GetBulkStatusAsync(
+        BulkStatusQuery query,
+        BulkStatusOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        await SimulateDelayAsync();
+
+        var results = new List<BulkStatusResult>();
+
+        foreach (var uuid in query.Uuids)
+        {
+            if (_invoiceStatuses.TryGetValue(uuid, out var status))
+            {
+                _invoices.TryGetValue(uuid, out var invoice);
+                results.Add(new BulkStatusResult
+                {
+                    Uuid = uuid,
+                    DocumentType = RouteDocumentType.EFatura,
+                    Status = new InvoiceStatusResult
+                    {
+                        Uuid = uuid,
+                        InvoiceNumber = invoice?.InvoiceNumber,
+                        Status = status,
+                        StatusDescription = GetStatusDescription(status)
+                    },
+                    Success = true
+                });
+            }
+            else
+            {
+                results.Add(new BulkStatusResult
+                {
+                    Uuid = uuid,
+                    Success = false,
+                    Error = "Document not found"
+                });
+            }
+        }
+
+        return CreateSuccessResponse(results);
     }
 
     #endregion

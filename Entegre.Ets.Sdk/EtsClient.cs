@@ -6,6 +6,7 @@ using Entegre.Ets.Sdk.Models.Invoice;
 using Entegre.Ets.Sdk.Models.Dispatch;
 using Entegre.Ets.Sdk.Models.ProducerReceipt;
 using Entegre.Ets.Sdk.Models.Incoming;
+using Entegre.Ets.Sdk.ExchangeRate;
 
 namespace Entegre.Ets.Sdk;
 
@@ -132,6 +133,198 @@ public class EtsClient : IEtsClient, IDisposable
             EtsEndpoints.CheckEInvoiceUser,
             request,
             cancellationToken);
+    }
+
+    #endregion
+
+    #region Auto-routing Operations
+
+    /// <inheritdoc />
+    public async Task<ApiResponse<AutoRouteResult>> SendInvoiceAutoAsync(
+        InvoiceRequest invoice,
+        AutoRouteOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        options ??= new AutoRouteOptions();
+
+        // Get recipient tax ID
+        var recipientTaxId = invoice.Receiver?.TaxId;
+        if (string.IsNullOrEmpty(recipientTaxId))
+        {
+            return new ApiResponse<AutoRouteResult>
+            {
+                Success = false,
+                Message = "Alıcı VKN/TCKN bilgisi bulunamadı"
+            };
+        }
+
+        bool isEInvoiceUser;
+        RouteDocumentType documentType;
+
+        // Check if type is forced
+        if (options.ForceType.HasValue)
+        {
+            documentType = options.ForceType.Value;
+            isEInvoiceUser = options.ForceType.Value == RouteDocumentType.EFatura;
+        }
+        else
+        {
+            // Check E-Invoice status
+            try
+            {
+                var userCheck = await CheckEInvoiceUserAsync(recipientTaxId, cancellationToken);
+                isEInvoiceUser = userCheck.Data?.IsEInvoiceUser ?? false;
+            }
+            catch
+            {
+                // On error, default to E-Archive
+                isEInvoiceUser = false;
+            }
+            documentType = isEInvoiceUser ? RouteDocumentType.EFatura : RouteDocumentType.EArsiv;
+        }
+
+        // Send invoice
+        ApiResponse<InvoiceResult> result;
+
+        if (documentType == RouteDocumentType.EFatura)
+        {
+            invoice.DocumentType = DocumentType.EFatura;
+            result = await SendInvoiceAsync(invoice, cancellationToken);
+        }
+        else
+        {
+            invoice.DocumentType = DocumentType.EArsiv;
+            // Note: E-Archive specific fields would be set here
+            result = await SendInvoiceAsync(invoice, cancellationToken);
+        }
+
+        if (!result.Success || result.Data == null)
+        {
+            return new ApiResponse<AutoRouteResult>
+            {
+                Success = false,
+                Message = result.Message
+            };
+        }
+
+        return new ApiResponse<AutoRouteResult>
+        {
+            Success = true,
+            Data = new AutoRouteResult
+            {
+                Uuid = result.Data.Uuid,
+                InvoiceNumber = result.Data.InvoiceNumber,
+                DocumentType = documentType,
+                IsEInvoiceRecipient = isEInvoiceUser,
+                Result = result.Data
+            }
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<ApiResponse<List<BulkStatusResult>>> GetBulkStatusAsync(
+        BulkStatusQuery query,
+        BulkStatusOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        options ??= new BulkStatusOptions();
+
+        var results = new List<BulkStatusResult>();
+        var semaphore = new SemaphoreSlim(options.Concurrency);
+
+        var tasks = query.Uuids.Select(async uuid =>
+        {
+            await semaphore.WaitAsync(cancellationToken);
+            try
+            {
+                return await ProcessSingleStatusAsync(uuid, query.IncludeEArchive, options.Retries, cancellationToken);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
+
+        var taskResults = await Task.WhenAll(tasks);
+        results.AddRange(taskResults);
+
+        return new ApiResponse<List<BulkStatusResult>>
+        {
+            Success = true,
+            Data = results
+        };
+    }
+
+    private async Task<BulkStatusResult> ProcessSingleStatusAsync(
+        string uuid,
+        bool includeEArchive,
+        int retries,
+        CancellationToken cancellationToken)
+    {
+        string? lastError = null;
+
+        for (var attempt = 0; attempt <= retries; attempt++)
+        {
+            try
+            {
+                // Try E-Fatura first
+                var request = new InvoiceStatusRequest { Uuid = uuid };
+                var efaturaResult = await GetInvoiceStatusAsync(request, cancellationToken);
+
+                if (efaturaResult.Success && efaturaResult.Data != null)
+                {
+                    return new BulkStatusResult
+                    {
+                        Uuid = uuid,
+                        DocumentType = RouteDocumentType.EFatura,
+                        Status = efaturaResult.Data,
+                        Success = true
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                lastError = ex.Message;
+            }
+
+            if (includeEArchive)
+            {
+                try
+                {
+                    // Try E-Archive
+                    var request = new InvoiceStatusRequest { Uuid = uuid };
+                    var earsivResult = await GetInvoiceStatusAsync(request, cancellationToken);
+
+                    if (earsivResult.Success && earsivResult.Data != null)
+                    {
+                        return new BulkStatusResult
+                        {
+                            Uuid = uuid,
+                            DocumentType = RouteDocumentType.EArsiv,
+                            Status = earsivResult.Data,
+                            Success = true
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex.Message;
+                }
+            }
+
+            // Wait before retry
+            if (attempt < retries)
+            {
+                await Task.Delay(500 * (attempt + 1), cancellationToken);
+            }
+        }
+
+        return new BulkStatusResult
+        {
+            Uuid = uuid,
+            Success = false,
+            Error = lastError ?? "Belge bulunamadı"
+        };
     }
 
     #endregion
@@ -521,6 +714,22 @@ public interface IEtsClient
     /// </summary>
     Task<ApiResponse<EInvoiceUserResult>> CheckEInvoiceUserAsync(
         string taxId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sends an invoice with automatic E-Fatura/E-Arsiv routing based on recipient status
+    /// </summary>
+    Task<ApiResponse<AutoRouteResult>> SendInvoiceAutoAsync(
+        InvoiceRequest invoice,
+        AutoRouteOptions? options = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets status of multiple invoices in parallel
+    /// </summary>
+    Task<ApiResponse<List<BulkStatusResult>>> GetBulkStatusAsync(
+        BulkStatusQuery query,
+        BulkStatusOptions? options = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

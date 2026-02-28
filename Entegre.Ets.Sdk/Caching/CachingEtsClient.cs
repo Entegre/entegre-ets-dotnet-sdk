@@ -4,6 +4,7 @@ using Entegre.Ets.Sdk.Models.Invoice;
 using Entegre.Ets.Sdk.Models.Dispatch;
 using Entegre.Ets.Sdk.Models.ProducerReceipt;
 using Entegre.Ets.Sdk.Models.Incoming;
+using Entegre.Ets.Sdk.ExchangeRate;
 
 namespace Entegre.Ets.Sdk.Caching;
 
@@ -229,6 +230,20 @@ public class CachingEtsClient : IEtsClient
         string uuid,
         CancellationToken cancellationToken = default)
         => _inner.GetIncomingInvoiceXmlAsync(uuid, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<ApiResponse<AutoRouteResult>> SendInvoiceAutoAsync(
+        InvoiceRequest invoice,
+        AutoRouteOptions? options = null,
+        CancellationToken cancellationToken = default)
+        => _inner.SendInvoiceAutoAsync(invoice, options, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<ApiResponse<List<BulkStatusResult>>> GetBulkStatusAsync(
+        BulkStatusQuery query,
+        BulkStatusOptions? options = null,
+        CancellationToken cancellationToken = default)
+        => _inner.GetBulkStatusAsync(query, options, cancellationToken);
 
     /// <summary>
     /// Invalidates cached status for a specific invoice

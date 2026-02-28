@@ -71,6 +71,63 @@ public class InvoiceBuilder
     }
 
     /// <summary>
+    /// Sets the exchange rate manually
+    /// </summary>
+    public InvoiceBuilder WithExchangeRate(decimal rate)
+    {
+        _invoice.ExchangeRate = rate;
+        return this;
+    }
+
+    /// <summary>
+    /// Fetches and sets the exchange rate from TCMB automatically
+    /// </summary>
+    /// <param name="currencyCode">Currency code (optional, defaults to invoice currency)</param>
+    /// <param name="date">Rate date (optional, defaults to invoice date or today)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Builder for chaining</returns>
+    /// <example>
+    /// <code>
+    /// var invoice = await InvoiceBuilder.Create()
+    ///     .WithCurrency("USD")
+    ///     .WithDate(DateTime.Today)
+    ///     .WithAutoExchangeRateAsync()
+    ///     .ContinueWith(t => t.Result
+    ///         .WithSender("1234567890", "Sender")
+    ///         .WithReceiver("9876543210", "Receiver")
+    ///         .AddLine("Product", 1, 100)
+    ///         .Build());
+    /// </code>
+    /// </example>
+    public async Task<InvoiceBuilder> WithAutoExchangeRateAsync(
+        string? currencyCode = null,
+        DateTime? date = null,
+        CancellationToken cancellationToken = default)
+    {
+        var currency = currencyCode ?? _invoice.Currency;
+
+        // TRY always has rate 1
+        if (currency == "TRY")
+        {
+            _invoice.ExchangeRate = 1;
+            return this;
+        }
+
+        // Determine rate date: parameter > invoice date > today
+        var rateDate = date ?? (_invoice.IssueDate != default ? _invoice.IssueDate : DateTime.Today);
+
+        // Fetch from TCMB
+        var rate = await ExchangeRate.Tcmb.GetInvoiceRateAsync(currency, rateDate, cancellationToken);
+        _invoice.ExchangeRate = rate;
+
+        // Add exchange rate note
+        _invoice.Notes ??= new List<string>();
+        _invoice.Notes.Add($"Döviz Kuru: 1 {currency} = {rate:F4} TRY (TCMB {rateDate:yyyy-MM-dd})");
+
+        return this;
+    }
+
+    /// <summary>
     /// Sets the sender information
     /// </summary>
     public InvoiceBuilder WithSender(string taxId, string name, Action<PartyBuilder>? configure = null)

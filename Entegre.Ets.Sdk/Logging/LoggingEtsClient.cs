@@ -5,6 +5,7 @@ using Entegre.Ets.Sdk.Models.Invoice;
 using Entegre.Ets.Sdk.Models.Dispatch;
 using Entegre.Ets.Sdk.Models.ProducerReceipt;
 using Entegre.Ets.Sdk.Models.Incoming;
+using Entegre.Ets.Sdk.ExchangeRate;
 
 namespace Entegre.Ets.Sdk.Logging;
 
@@ -249,6 +250,45 @@ public class LoggingEtsClient : IEtsClient
         return await LoggedOperationAsync(
             "GET", $"incoming/invoice/xml?uuid={uuid}",
             () => _inner.GetIncomingInvoiceXmlAsync(uuid, cancellationToken));
+    }
+
+    /// <inheritdoc />
+    public async Task<ApiResponse<AutoRouteResult>> SendInvoiceAutoAsync(
+        InvoiceRequest invoice,
+        AutoRouteOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        return await LoggedOperationAsync(
+            "POST", "invoice/auto-send",
+            () => _inner.SendInvoiceAutoAsync(invoice, options, cancellationToken));
+    }
+
+    /// <inheritdoc />
+    public async Task<ApiResponse<List<BulkStatusResult>>> GetBulkStatusAsync(
+        BulkStatusQuery query,
+        BulkStatusOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        var sw = Stopwatch.StartNew();
+        _logger.LogDebug("Getting bulk status for {Count} documents", query.Uuids.Count);
+
+        try
+        {
+            var result = await _inner.GetBulkStatusAsync(query, options, cancellationToken);
+            sw.Stop();
+
+            _logger.LogInformation(
+                "Bulk status query completed: {Successful}/{Total} successful, Duration: {Duration}ms",
+                result.Data?.Count(r => r.Success) ?? 0, query.Uuids.Count, sw.ElapsedMilliseconds);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "Bulk status query failed after {Duration}ms", sw.ElapsedMilliseconds);
+            throw;
+        }
     }
 
     private async Task<ApiResponse<T>> LoggedOperationAsync<T>(
