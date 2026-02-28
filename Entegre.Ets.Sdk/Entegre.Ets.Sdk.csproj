@@ -8,7 +8,7 @@
 
     <!-- NuGet Package Info -->
     <PackageId>Entegre.Ets.Sdk</PackageId>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <Authors>On2 Elektronik</Authors>
     <Company>On2 Elektronik Ltd. Şti.</Company>
     <Description>Entegre ETS API SDK - E-Fatura, E-Arşiv, E-İrsaliye, E-Müstahsil için .NET SDK</Description>
