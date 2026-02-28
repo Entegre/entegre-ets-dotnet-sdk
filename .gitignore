@@ -59,3 +59,4 @@ Desktop.ini
 # Packages
 packages/
 *.nupkg
+.env
